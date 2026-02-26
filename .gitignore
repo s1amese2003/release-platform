@@ -1,0 +1,23 @@
+﻿# IDE
+.idea/
+.vscode/
+
+# Node
+release-web/node_modules/
+release-web/dist/
+release-web/.vite/
+
+# Java
+release-server/target/
+
+# Runtime workspace
+release-server/workdir/
+workdir/
+tmp-package/
+tmp-*.zip
+tmp-*.jar
+tools/
+1.9.0.zip
+
+# Logs
+*.log

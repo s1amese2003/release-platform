@@ -1,0 +1,38 @@
+:root {
+  --bg-panel: #0f1f35;
+  --bg-card: #12253f;
+  --text-main: #f4f7ff;
+  --text-sub: #9cb0ce;
+  --line-soft: rgba(176, 193, 220, 0.24);
+  --ok: #2fc089;
+  --warn: #f2a13f;
+  --danger: #ec5f70;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "IBM Plex Sans", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: var(--text-main);
+}
+
+.panel {
+  background: linear-gradient(160deg, rgba(21, 39, 63, 0.95), rgba(15, 31, 53, 0.92));
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.page-title {
+  margin: 0 0 12px;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.page-tip {
+  margin: 0 0 14px;
+  color: var(--text-sub);
+}
