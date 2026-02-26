@@ -15,7 +15,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -42,7 +41,6 @@ public class JarPackageParser {
     private static final Pattern UPGRADE_VERSION_PATTERN = Pattern.compile("^BOOT-INF/classes/upgrade/(\\d{8})/.*");
     private static final Pattern CONFIG_PATTERN = Pattern.compile("^BOOT-INF/classes/(bootstrap.*\\.yml|application.*\\.yml)$");
     private static final Pattern DEP_PATTERN = Pattern.compile("^BOOT-INF/lib/(.+)\\.jar$");
-    private static final int MAX_NESTED_DEPTH = 2;
 
     @Value("${release.work-dir:./workdir}")
     private String workDir;
@@ -57,128 +55,90 @@ public class JarPackageParser {
             file.transferTo(packagePath);
             String md5 = md5(packagePath);
 
-            ParsedArchiveData parsed = parseArchive(packagePath, 0, base);
-            parsed.versions.sort(Comparator.reverseOrder());
+            List<String> versions = new ArrayList<>();
+            Map<String, String> sqlByVersion = new HashMap<>();
+            Map<String, String> configTxtByVersion = new HashMap<>();
+            Map<String, String> configFiles = new LinkedHashMap<>();
+            List<DependencyCoordinate> dependencies = new ArrayList<>();
+            String appVersion = "unknown";
+            String buildJdk = "unknown";
+            LocalDateTime buildTime = null;
 
-            String latest = parsed.versions.isEmpty() ? null : parsed.versions.get(0);
-            String sqlContent = latest == null ? "" : parsed.sqlByVersion.getOrDefault(latest, "");
-            String configTxt = latest == null ? "" : parsed.configTxtByVersion.getOrDefault(latest, "");
+            try (ZipFile zipFile = openZipWithFallback(packagePath)) {
+                Manifest manifest = loadManifest(zipFile);
+                if (manifest != null) {
+                    Attributes attrs = manifest.getMainAttributes();
+                    appVersion = firstNonBlank(
+                            attrs.getValue("Implementation-Version"),
+                            attrs.getValue("Build-Version"),
+                            attrs.getValue("App-Version"),
+                            "unknown");
+                    buildJdk = firstNonBlank(attrs.getValue("Build-Jdk"), attrs.getValue("Build-JDK"), "unknown");
+                    buildTime = parseBuildTime(attrs.getValue("Build-Time"));
+                }
+
+                zipFile.stream().forEach(entry -> {
+                    String normalizedName = entry.getName().replace('\\', '/');
+                    Matcher versionMatcher = UPGRADE_VERSION_PATTERN.matcher(normalizedName);
+                    if (versionMatcher.matches()) {
+                        String version = versionMatcher.group(1);
+                        if (!versions.contains(version)) {
+                            versions.add(version);
+                        }
+                    }
+
+                    if (normalizedName.endsWith("/upgrade.sql") && normalizedName.contains("BOOT-INF/classes/upgrade/")) {
+                        String version = extractVersion(normalizedName);
+                        if (version != null) {
+                            sqlByVersion.put(version, readEntry(zipFile, entry));
+                        }
+                    }
+
+                    if (normalizedName.endsWith("/config.txt") && normalizedName.contains("BOOT-INF/classes/upgrade/")) {
+                        String version = extractVersion(normalizedName);
+                        if (version != null) {
+                            configTxtByVersion.put(version, readEntry(zipFile, entry));
+                        }
+                    }
+
+                    if (CONFIG_PATTERN.matcher(normalizedName).matches()) {
+                        configFiles.put(normalizedName, readEntry(zipFile, entry));
+                    }
+
+                    Matcher depMatcher = DEP_PATTERN.matcher(normalizedName);
+                    if (depMatcher.matches()) {
+                        dependencies.add(parseDependency(depMatcher.group(1)));
+                    }
+                });
+            }
+
+            versions.sort(Comparator.reverseOrder());
+            String latest = versions.isEmpty() ? null : versions.get(0);
+            String sqlContent = latest == null ? "" : sqlByVersion.getOrDefault(latest, "");
+            String configTxt = latest == null ? "" : configTxtByVersion.getOrDefault(latest, "");
             String sqlFilePath = latest == null ? "" : "BOOT-INF/classes/upgrade/" + latest + "/upgrade.sql";
 
             return new PackageParseResult(
                     requestNo,
                     appName,
-                    parsed.appVersion,
+                    appVersion,
                     targetEnv,
-                    parsed.buildTime,
-                    parsed.buildJdk,
+                    buildTime,
+                    buildJdk,
                     packagePath.toString(),
                     md5,
-                    parsed.versions,
+                    versions,
                     latest,
                     sqlFilePath,
                     sqlContent,
                     configTxt,
                     parseConfigTxt(configTxt),
-                    parsed.configFiles,
-                    parsed.dependencies
+                    configFiles,
+                    dependencies
             );
         } catch (IOException ex) {
             throw new IllegalStateException("Package parse failed: " + ex.getMessage(), ex);
         }
-    }
-
-    private ParsedArchiveData parseArchive(Path archivePath, int depth, Path baseDir) throws IOException {
-        ParsedArchiveData current = parseArchiveDirect(archivePath);
-
-        if (current.hasReleaseMarkers() || depth >= MAX_NESTED_DEPTH) {
-            return current;
-        }
-
-        ParsedArchiveData best = current;
-        int index = 0;
-
-        try (ZipFile zipFile = openZipWithFallback(archivePath)) {
-            var entries = zipFile.entries();
-            while (entries.hasMoreElements()) {
-                ZipEntry entry = entries.nextElement();
-                if (entry.isDirectory()) {
-                    continue;
-                }
-
-                String name = entry.getName().replace('\\', '/');
-                String lower = name.toLowerCase(Locale.ROOT);
-                if (!lower.endsWith(".jar") && !lower.endsWith(".zip")) {
-                    continue;
-                }
-
-                Path nestedPath = baseDir.resolve("nested-" + depth + "-" + (index++) + "-" + sanitizeFileName(Paths.get(name).getFileName().toString()));
-                try (InputStream is = zipFile.getInputStream(entry)) {
-                    Files.copy(is, nestedPath, StandardCopyOption.REPLACE_EXISTING);
-                }
-
-                ParsedArchiveData nested = parseArchive(nestedPath, depth + 1, baseDir);
-                if (nested.score() > best.score()) {
-                    best = nested;
-                }
-            }
-        }
-
-        return best;
-    }
-
-    private ParsedArchiveData parseArchiveDirect(Path archivePath) throws IOException {
-        ParsedArchiveData data = new ParsedArchiveData();
-
-        try (ZipFile zipFile = openZipWithFallback(archivePath)) {
-            Manifest manifest = loadManifest(zipFile);
-            if (manifest != null) {
-                Attributes attrs = manifest.getMainAttributes();
-                data.appVersion = firstNonBlank(
-                        attrs.getValue("Implementation-Version"),
-                        attrs.getValue("Build-Version"),
-                        attrs.getValue("App-Version"),
-                        "unknown");
-                data.buildJdk = firstNonBlank(attrs.getValue("Build-Jdk"), attrs.getValue("Build-JDK"), "unknown");
-                data.buildTime = parseBuildTime(attrs.getValue("Build-Time"));
-            }
-
-            zipFile.stream().forEach(entry -> {
-                String normalizedName = entry.getName().replace('\\', '/');
-                Matcher versionMatcher = UPGRADE_VERSION_PATTERN.matcher(normalizedName);
-                if (versionMatcher.matches()) {
-                    String version = versionMatcher.group(1);
-                    if (!data.versions.contains(version)) {
-                        data.versions.add(version);
-                    }
-                }
-
-                if (normalizedName.endsWith("/upgrade.sql") && normalizedName.contains("BOOT-INF/classes/upgrade/")) {
-                    String version = extractVersion(normalizedName);
-                    if (version != null) {
-                        data.sqlByVersion.put(version, readEntry(zipFile, entry));
-                    }
-                }
-
-                if (normalizedName.endsWith("/config.txt") && normalizedName.contains("BOOT-INF/classes/upgrade/")) {
-                    String version = extractVersion(normalizedName);
-                    if (version != null) {
-                        data.configTxtByVersion.put(version, readEntry(zipFile, entry));
-                    }
-                }
-
-                if (CONFIG_PATTERN.matcher(normalizedName).matches()) {
-                    data.configFiles.put(normalizedName, readEntry(zipFile, entry));
-                }
-
-                Matcher depMatcher = DEP_PATTERN.matcher(normalizedName);
-                if (depMatcher.matches()) {
-                    data.dependencies.add(parseDependency(depMatcher.group(1)));
-                }
-            });
-        }
-
-        return data;
     }
 
     private ZipFile openZipWithFallback(Path packagePath) throws IOException {
@@ -187,16 +147,16 @@ public class JarPackageParser {
                 Charset.forName("GBK"),
                 Charset.defaultCharset()
         );
+        LinkedHashSet<Charset> unique = new LinkedHashSet<>(candidates);
 
         IOException last = null;
-        for (Charset charset : new LinkedHashSet<>(candidates)) {
+        for (Charset charset : unique) {
             try {
                 return new ZipFile(packagePath.toFile(), charset);
             } catch (IOException ex) {
                 last = ex;
             }
         }
-
         if (last != null) {
             throw last;
         }
@@ -292,42 +252,5 @@ public class JarPackageParser {
                 .filter(line -> !line.isBlank())
                 .filter(line -> !line.startsWith("#"))
                 .collect(Collectors.toList());
-    }
-
-    private String sanitizeFileName(String name) {
-        return name.replaceAll("[^a-zA-Z0-9._-]", "_");
-    }
-
-    private static class ParsedArchiveData {
-        private String appVersion = "unknown";
-        private String buildJdk = "unknown";
-        private LocalDateTime buildTime;
-
-        private final List<String> versions = new ArrayList<>();
-        private final Map<String, String> sqlByVersion = new HashMap<>();
-        private final Map<String, String> configTxtByVersion = new HashMap<>();
-        private final Map<String, String> configFiles = new LinkedHashMap<>();
-        private final List<DependencyCoordinate> dependencies = new ArrayList<>();
-
-        private boolean hasReleaseMarkers() {
-            return !versions.isEmpty()
-                    || !sqlByVersion.isEmpty()
-                    || !configTxtByVersion.isEmpty()
-                    || !configFiles.isEmpty()
-                    || !dependencies.isEmpty();
-        }
-
-        private int score() {
-            int score = 0;
-            score += versions.size() * 100;
-            score += sqlByVersion.size() * 80;
-            score += configTxtByVersion.size() * 50;
-            score += configFiles.size() * 30;
-            score += Math.min(dependencies.size(), 50);
-            if (!"unknown".equalsIgnoreCase(appVersion)) {
-                score += 10;
-            }
-            return score;
-        }
     }
 }
