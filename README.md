@@ -1,48 +1,48 @@
-# 椤圭洰涓婄嚎骞冲彴
+# 项目上线平台
 
-## 鐩綍
+## 项目简介
 
-- `release-server`锛歋pring Boot 3 鍚庣
-- `release-web`锛歏ue3 + Element Plus 鍓嶇
-- `docs`锛氳鍒欎笌鍩虹嚎鏂囨。
+本项目用于支撑 ITSM 上线发布管控，包含以下能力：
 
-## 鍚庣鑳藉姏
+- 上传 JAR/ZIP 并自动解析升级内容
+- SQL 审计（P0/P1/P2 风险分级）
+- 配置比对（与环境基线逐项对比）
+- 依赖扫描（版本变化与高风险提示）
+- 审批流动作（APPROVE / REJECT / DEPLOY）
 
-- 涓婁紶 JAR/ZIP 骞惰В鏋愶細
-  - `upgrade/{yyyyMMdd}` 鐗堟湰璇嗗埆
-  - 鏈€鏂?`upgrade.sql` 涓?`config.txt` 鎻愬彇
-  - `bootstrap*.yml` / `application*.yml` 瑙ｆ瀽
-  - `BOOT-INF/lib` 渚濊禆鎻愬彇
-  - `MANIFEST.MF` 鏋勫缓淇℃伅鎻愬彇
-- SQL 瀹¤锛歅0/P1/P2 瑙勫垯寮曟搸
-- 閰嶇疆姣斿锛氫笌鐜鍩虹嚎閫愰」 diff
-- 渚濊禆鎵弿锛氱増鏈彉鏇?+ 甯歌楂樺嵄渚濊禆鎻愮ず
-- 瀹℃壒鍔ㄤ綔锛欰PPROVE / REJECT / DEPLOY
+## 目录结构
 
-## API
+- `release-server`：Spring Boot 3 后端
+- `release-web`：Vue3 + Element Plus 前端
+- `docs`：规则与基线文档
 
-- `POST /api/releases/analyze`
-- `GET /api/releases/{requestNo}`
-- `POST /api/releases/{requestNo}/approval`
-- `GET /api/baselines/{env}/{appName}`
-- `POST /api/baselines/{env}/{appName}`
-- `GET /api/system/health`
+## 后端启动
 
-## 鍚姩
-
-### 鍚庣
-
-```bash
-cd release-server
-mvn spring-boot:run
+```powershell
+cd E:\release-platform\release-server
+mvn --% spring-boot:run -DskipTests -Dspring-boot.run.arguments=--server.port=8081
 ```
 
-### 鍓嶇
+## 前端启动
 
-```bash
-cd release-web
+```powershell
+cd E:\release-platform\release-web
 npm install
-npm run dev
+npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
-榛樿鑱旇皟鍦板潃锛氬墠绔?`5173` 浠ｇ悊鍒板悗绔?`8080`銆?
+## 访问地址
+
+- 前端：`http://127.0.0.1:5173`
+- 后端健康检查：`http://127.0.0.1:8081/api/system/health`
+
+## 前端代理说明
+
+前端默认将 `/api` 代理到 `http://127.0.0.1:8081`。
+
+如果你本地后端端口不是 `8081`，可在启动前端前设置：
+
+```powershell
+$env:VITE_API_TARGET='http://127.0.0.1:8082'
+npm run dev -- --host 0.0.0.0 --port 5173
+```

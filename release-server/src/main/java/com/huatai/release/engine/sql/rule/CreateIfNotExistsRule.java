@@ -14,7 +14,7 @@ public class CreateIfNotExistsRule implements SqlRule {
         String normalized = context.normalized();
         if (normalized.startsWith("CREATE TABLE") && normalized.contains("IF NOT EXISTS")) {
             return Optional.of(new SqlAuditIssue(context.line(), context.sql(), RiskLevel.P2,
-                    "CREATE TABLE IF NOT EXISTS", "纭骞傜瓑鍒涘缓閫昏緫鏄惁绗﹀悎棰勬湡"));
+                    "CREATE TABLE IF NOT EXISTS", "确认幂等创建逻辑是否符合预期"));
         }
         return Optional.empty();
     }

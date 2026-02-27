@@ -1,30 +1,40 @@
-# SQL 瀹¤瑙勫垯璇存槑
+# SQL 审计规则说明
 
-## 椋庨櫓绛夌骇
+## 风险等级
 
-- `P0`锛氱姝紝鍛戒腑鍚庤嚜鍔ㄩ┏鍥?- `P1`锛氳鍛婏紝闇€ DBA/寮€鍙戣礋璐ｄ汉纭
-- `P2`锛氭彁绀猴紝寤鸿琛ュ厖璇存槑鍚庣户缁?
-## 宸插疄鐜拌鍒?
+- `P0`：禁止，命中后自动驳回
+- `P1`：警告，需要 DBA/开发负责人确认
+- `P2`：提示，建议补充说明后继续
+
+## 已实现规则
+
 ### P0
 
 - `DROP TABLE` / `DROP DATABASE`
 - `TRUNCATE TABLE`
-- `DELETE` 鏃?`WHERE`
-- `UPDATE` 鏃?`WHERE`
-- 鎿嶄綔绯荤粺搴擄紙`mysql`/`information_schema`/`performance_schema`锛?- 鐢熶骇鐜 `spring.profiles.active != prod`锛堥厤缃鍒欎骇鐢?P0锛?
+- `DELETE` 无 `WHERE`
+- `UPDATE` 无 `WHERE`
+- 操作系统库：`mysql` / `information_schema` / `performance_schema`
+
 ### P1
 
 - `ALTER TABLE DROP COLUMN`
 - `ALTER TABLE MODIFY/CHANGE COLUMN`
-- 鍔犵储寮曟湭鏄惧紡 `ALGORITHM=INPLACE`
+- 大表加索引但缺少在线算法提示
 - `GRANT` / `REVOKE`
 
 ### P2
 
-- `ALTER TABLE ADD COLUMN` 鏃犻粯璁ゅ€?- `INSERT INTO db.table` 璺ㄥ簱鍐欏叆
+- `ALTER TABLE ADD COLUMN` 无默认值
+- `INSERT INTO db.table` 跨库写入
 - `CREATE TABLE IF NOT EXISTS`
 
-## 鎵╁睍鏂瑰紡
+## 扩展规则方式
 
-瑙勫垯浣嶄簬 `release-server/src/main/java/com/huatai/release/engine/sql/rule/`銆?鏂板瑙勫垯姝ラ锛?
-1. 瀹炵幇 `SqlRule` 鎺ュ彛銆?2. 鍦?`SqlRiskAnalyzer` 鐨?`rules` 鍒楄〃涓敞鍐屻€?3. 涓鸿鍒欒ˉ鍏呮祴璇曟牱渚嬶紙寤鸿鎸?P0/P1/P2 鍒嗙粍锛夈€?
+规则位于：`release-server/src/main/java/com/huatai/release/engine/sql/rule/`
+
+新增规则步骤：
+
+1. 实现 `SqlRule` 接口
+2. 在 `SqlRiskAnalyzer` 中注册规则
+3. 补充对应的测试样例

@@ -40,7 +40,7 @@ public class ReleaseController {
     public ApiResponse<ReleaseCheckReport> findReport(@PathVariable String requestNo) {
         ReleaseCheckReport report = releaseService.findReport(requestNo);
         if (report == null) {
-            return ApiResponse.fail("鏈壘鍒扮敵璇峰崟: " + requestNo);
+            return ApiResponse.fail("未找到申请单: " + requestNo);
         }
         return ApiResponse.ok(report);
     }

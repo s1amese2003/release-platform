@@ -31,7 +31,7 @@ public class ApprovalServiceImpl implements ApprovalService {
     public RequestStatus action(String requestNo, ApprovalActionRequest request) {
         RequestStatus current = store.getStatus(requestNo);
         if (current == null) {
-            throw new IllegalArgumentException("鐢宠鍗曚笉瀛樺湪: " + requestNo);
+            throw new IllegalArgumentException("申请单不存在: " + requestNo);
         }
 
         String action = request.getAction().toUpperCase();
@@ -43,7 +43,7 @@ public class ApprovalServiceImpl implements ApprovalService {
                 next = RequestStatus.DEPLOYED;
                 snapshotBaseline(requestNo);
             }
-            default -> throw new IllegalArgumentException("涓嶆敮鎸佺殑瀹℃壒鍔ㄤ綔: " + request.getAction());
+            default -> throw new IllegalArgumentException("不支持的审批动作: " + request.getAction());
         }
 
         store.saveStatus(requestNo, next);
