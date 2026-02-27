@@ -1,52 +1,52 @@
-﻿# Release Platform (Go)
+﻿# Release Platform（Go）
 
-A lightweight artifact admission and approval release platform, implemented with Go + Gin + Asynq + PostgreSQL.
+一个轻量的制品准入与审批发布平台，基于 Go + Gin + Asynq + PostgreSQL 实现。
 
-## Implemented Scope (MVP)
+## 已实现能力（MVP）
 
-- Artifact upload (`zip/jar/war`) with SHA-256 hash
-- Secure extraction with Zip Slip protection
-- Latest SQL location:
+- 上传制品（`zip/jar/war`）并计算 SHA-256
+- 安全解压（支持 Zip Slip 防护）
+- 自动定位最新升级 SQL：
   - `BOOT-INF/classes/upgrade/YYYYMMDD/upgrade.sql`
-  - Auto-pick max date folder
-- SQL risk scanning (HIGH/MEDIUM/LOW)
-- `bootstrap-dev.yml` config diff against active online snapshot
-- Policy decision (`PASS/WARN/BLOCK`)
-- Approval actions and deployment gating
-- Deployment simulation + active config snapshot update
-- Async scan worker (Redis + Asynq)
-- Audit log records
-- Built-in lightweight web console (`/`) for release workflow
+  - 多日期目录时自动选最大日期
+- SQL 风险扫描（`HIGH/MEDIUM/LOW`）
+- `bootstrap-dev.yml` 与线上激活配置快照对比
+- 策略引擎输出准入结论（`PASS/WARN/BLOCK`）
+- 审批动作与部署门禁
+- 部署模拟回调 + 发布后写入新基线快照
+- 异步扫描 Worker（Redis + Asynq）
+- 审计日志记录
+- 内置轻量 Web 控制台（`/`）
 
-## Architecture
+## 技术架构
 
-- HTTP API: Gin
-- DB: PostgreSQL (GORM auto-migration)
-- Queue: Redis + Asynq
-- Storage: local filesystem (`./data`)
+- HTTP API：Gin
+- 数据库：PostgreSQL（GORM 自动迁移）
+- 队列：Redis + Asynq
+- 存储：本地文件系统（`./data`）
 
-Processes:
+进程划分：
 
-- API server: `cmd/server`
-- Worker: `cmd/worker`
+- API 服务：`cmd/server`
+- Worker 服务：`cmd/worker`
 
-## Quick Start
+## 快速启动
 
-### 1. Prepare env
+### 1. 准备环境变量
 
-Copy env file:
+复制模板：
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-### 2. Start infra (async mode)
+### 2. 启动依赖（异步模式）
 
 ```powershell
 docker compose up -d
 ```
 
-### 3. Install dependencies and run (async mode)
+### 3. 安装依赖并运行（异步模式）
 
 ```powershell
 go mod tidy
@@ -54,21 +54,21 @@ go run ./cmd/server
 go run ./cmd/worker
 ```
 
-If you want to run in separate terminals:
+如需分两个终端：
 
-- Terminal A: `go run ./cmd/server`
-- Terminal B: `go run ./cmd/worker`
+- 终端 A：`go run ./cmd/server`
+- 终端 B：`go run ./cmd/worker`
 
-### 4. Open web console
+### 4. 打开控制台
 
-After server starts:
+服务启动后访问：
 
-- Console: `http://127.0.0.1:8080/`
-- Health: `http://127.0.0.1:8080/healthz`
+- 控制台：`http://127.0.0.1:8080/`
+- 健康检查：`http://127.0.0.1:8080/healthz`
 
-### Local lightweight mode (no PostgreSQL/Redis)
+### 本机轻量模式（不依赖 PostgreSQL/Redis）
 
-If you only want quick local verification on one process:
+如果你只想本机快速验证，可使用单进程模式：
 
 ```powershell
 $env:DATABASE_DRIVER='sqlite'
@@ -77,11 +77,11 @@ $env:SCAN_MODE='sync'
 go run ./cmd/server
 ```
 
-In this mode, scanning runs synchronously and worker process is not required.
+说明：该模式下扫描为同步执行，不需要启动 Worker。
 
-## API
+## 接口说明
 
-### Create release ticket
+### 创建发布单
 
 ```http
 POST /api/releases
@@ -96,7 +96,7 @@ Content-Type: application/json
 }
 ```
 
-### Upload artifact
+### 上传制品
 
 ```http
 POST /api/releases/{id}/artifact
@@ -104,20 +104,20 @@ Content-Type: multipart/form-data
 Form field: artifact=<file>
 ```
 
-### Trigger scan
+### 触发扫描
 
 ```http
 POST /api/releases/{id}/scan
 X-User: alice
 ```
 
-### Query report
+### 查询报告
 
 ```http
 GET /api/releases/{id}/report
 ```
 
-### Approve release
+### 审批发布单
 
 ```http
 POST /api/releases/{id}/approve
@@ -132,7 +132,7 @@ Content-Type: application/json
 }
 ```
 
-### Deploy release
+### 触发部署
 
 ```http
 POST /api/releases/{id}/deploy
@@ -144,7 +144,7 @@ Content-Type: application/json
 }
 ```
 
-### Policy APIs
+### 策略接口
 
 ```http
 GET /api/policies
@@ -152,39 +152,39 @@ GET /api/policies?environment=dev
 PUT /api/policies/{id}
 ```
 
-## Status Model
+## 状态字段
 
-- `scan_status`: `PENDING|RUNNING|DONE|FAILED`
-- `approval_status`: `PENDING|APPROVED|REJECTED|NOT_REQUIRED`
-- `admission_result`: `PASS|WARN|BLOCK`
-- `deploy_status`: `NOT_TRIGGERED|RUNNING|SUCCESS|FAILED`
+- `scan_status`：`PENDING|RUNNING|DONE|FAILED`
+- `approval_status`：`PENDING|APPROVED|REJECTED|NOT_REQUIRED`
+- `admission_result`：`PASS|WARN|BLOCK`
+- `deploy_status`：`NOT_TRIGGERED|RUNNING|SUCCESS|FAILED`
 
-## SQL Risk Rules (Current)
+## SQL 风险规则（当前）
 
-- HIGH:
+- HIGH：
   - `DROP DATABASE`
   - `DROP TABLE`
   - `TRUNCATE TABLE`
-  - `DELETE` without `WHERE`
-  - `UPDATE` without `WHERE`
+  - 无 `WHERE` 的 `DELETE`
+  - 无 `WHERE` 的 `UPDATE`
   - `ALTER TABLE ... DROP COLUMN`
-- MEDIUM:
+- MEDIUM：
   - `RENAME TABLE`
-  - index rebuild (`CREATE/DROP INDEX`)
-- LOW:
-  - create table without `IF NOT EXISTS`
-  - drop table without `IF EXISTS`
-  - missing rollback note in SQL file
+  - 索引重建（`CREATE/DROP INDEX`）
+- LOW：
+  - 建表未使用 `IF NOT EXISTS`
+  - 删表未使用 `IF EXISTS`
+  - SQL 文件缺少回滚说明
 
-## Config Diff Rules
+## 配置差异规则
 
-- Flatten YAML to `key=value`
-- Compare against active snapshot for same `application + environment`
-- Diff type: `ADDED|DELETED|MODIFIED`
-- Sensitive key masking: password/secret/token/etc.
-- Critical keys include datasource/nacos and sensitive keys
+- YAML 扁平化为 `key=value`
+- 与同 `application + environment` 的激活快照对比
+- 差异类型：`ADDED|DELETED|MODIFIED`
+- 敏感项自动脱敏（password/secret/token 等）
+- 关键项包括 datasource/nacos 及敏感配置
 
-## Project Structure
+## 项目目录
 
 ```text
 cmd/
@@ -203,17 +203,17 @@ web/
   assets/
 ```
 
-## Limitations (Current MVP)
+## 当前限制（MVP）
 
-- SQL parser is rule-based (not full AST parser)
-- Deployment is simulated callback point
-- RBAC is lightweight header-based middleware (can be replaced by Casbin)
-- Local filesystem storage only (can be switched to S3/MinIO)
+- SQL 解析为规则匹配，尚未引入完整 AST 解析
+- 部署为模拟回调点，未接真实部署系统
+- RBAC 为轻量 Header 校验，可替换为 Casbin
+- 当前仅支持本地文件存储，可扩展到 S3/MinIO
 
-## Next Recommended Enhancements
+## 后续建议
 
-- Integrate Casbin RBAC and SSO
-- Add AST SQL parser per database dialect
-- Add CI pre-check API and webhook callback
-- Add frontend (Vue3 + Element Plus) for report visualization
-- Add export report (PDF/Excel)
+- 接入 Casbin + SSO
+- 按数据库方言引入 AST SQL 解析
+- 增加 CI 预检查 API 与 Webhook
+- 增加报表导出（PDF/Excel）
+- 完善白名单、过期策略与二级审批策略中心
