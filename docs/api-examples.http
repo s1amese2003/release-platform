@@ -1,0 +1,55 @@
+﻿@baseUrl = http://127.0.0.1:8080
+
+### create release
+POST {{baseUrl}}/api/releases
+Content-Type: application/json
+
+{
+  "application": "order-service",
+  "owner": "team-order",
+  "environment": "dev",
+  "version": "2026.02.26-01",
+  "uploader": "alice"
+}
+
+### list releases
+GET {{baseUrl}}/api/releases
+
+### upload artifact
+POST {{baseUrl}}/api/releases/1/artifact
+Content-Type: multipart/form-data; boundary=MyBoundary
+
+--MyBoundary
+Content-Disposition: form-data; name="artifact"; filename="app.jar"
+Content-Type: application/java-archive
+
+< ./app.jar
+--MyBoundary--
+
+### trigger scan
+POST {{baseUrl}}/api/releases/1/scan
+X-User: alice
+
+### report
+GET {{baseUrl}}/api/releases/1/report
+
+### approve
+POST {{baseUrl}}/api/releases/1/approve
+X-Role: owner
+Content-Type: application/json
+
+{
+  "approver": "bob",
+  "action": "approve",
+  "comment": "looks good",
+  "level": 2
+}
+
+### deploy
+POST {{baseUrl}}/api/releases/1/deploy
+X-Role: ops
+Content-Type: application/json
+
+{
+  "operator": "ops-user"
+}

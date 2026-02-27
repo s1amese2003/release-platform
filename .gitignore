@@ -1,0 +1,14 @@
+﻿# Local runtime
+.env
+.cache/
+data/
+tmp/
+server-out.log
+server-err.log
+
+# Local test artifacts
+1.9.0.zip
+
+# OS/editor
+.DS_Store
+Thumbs.db
